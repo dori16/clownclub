@@ -1,0 +1,16 @@
+{
+  "name": "clown-club",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests.mjs server-tests.mjs",
+    "build": "bash scripts/build.sh",
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "vapid:generate": "node scripts/generate-vapid.mjs",
+    "vault:init": "node --env-file-if-exists=.env scripts/init-vault.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,5 @@
+export function b64(a){const bytes=new Uint8Array(a);let s='';for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(s);}
+export function un64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
+export async function derive(password,salt){const raw=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:un64(salt),iterations:310000,hash:'SHA-256'},raw,{name:'AES-GCM',length:256},true,['encrypt','decrypt']);}
+export async function seal(data,key,salt){const iv=crypto.getRandomValues(new Uint8Array(12));const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));return {format:'clown-v1',salt,iv:b64(iv),cipher:b64(cipher)};}
+export async function decrypt(e,key){if(e.format!=='clown-v1'||!e.salt||!e.iv||!e.cipher)throw Error('Backup non valido');return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:un64(e.iv)},key,un64(e.cipher))));}

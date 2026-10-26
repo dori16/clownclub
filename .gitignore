@@ -1,0 +1,27 @@
+import-source.json
+prepare-seed.mjs
+dist/qa-preview/
+*.zip
+
+dist/
+public/qa-preview/
+
+# Runtime secrets and local state
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+node_modules/
+.wrangler/
+.sites-runtime/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.tar.gz
+.DS_Store
+
+# Private expense archives must not be published to GitHub.
+public/seed.clown
+*.clown
