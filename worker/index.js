@@ -68,7 +68,10 @@ export default {async fetch(request,env,ctx){try{const u=new URL(request.url),pa
   if(path==='/api/sync'){
     const settings=await sheets(env);if(!settings)return json({ok:false,error:'Il foglio non è ancora collegato da Doriano'},409);const target=new URL(settings.url);let opts={redirect:'follow',signal:AbortSignal.timeout(25000)};
     if(request.method==='GET'){target.searchParams.set('token',settings.token);target.searchParams.set('t',Date.now());}else if(request.method==='POST'){const d=await body(request);opts={...opts,method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:settings.token,expectedRevision:d.expectedRevision,envelope:d.envelope})};}else return json({error:'Metodo non supportato'},405);
-    const r=await fetch(target,opts);if(!r.ok)return json({ok:false,error:'Google Sheets non risponde'},502);return json(await r.json());
+    let r;try{r=await fetch(target,opts);}catch{return json({ok:false,error:'Google Sheets non raggiungibile. Riprova tra poco.'},502);}
+    const text=await r.text();let data;try{data=JSON.parse(text);}catch{const login=/accounts\.google\.com|ServiceLogin/.test(r.url+text);return json({ok:false,error:login?'Il foglio chiede il login Google: in Apps Script distribuisci la web app con accesso “Chiunque”.':`Il foglio non risponde con dati validi (HTTP ${r.status}). Controlla che l’URL finisca con /exec e che il deployment sia aggiornato.`},502);}
+    if(data&&data.ok===false&&!data.conflict&&data.error)data.error='Google Sheets: '+data.error;
+    return json(data);
   }
   if(path==='/api/push/key')return json({publicKey:env.VAPID_PUBLIC_KEY});
   if(path==='/api/push/subscribe'&&request.method==='POST'){
