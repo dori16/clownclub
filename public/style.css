@@ -6,3 +6,41 @@
 html[data-theme="dark"]{color-scheme:dark;--ink:#edeaf5;--muted:#a6a1b7;--purple:#bba7ff;--line:#ffffff10;--glass:rgba(37,34,49,.76);--shadow:0 14px 60px #0000001a}html[data-theme="dark"] body{background:#16151e}html[data-theme="dark"] .one{background:#44305f;opacity:.6}html[data-theme="dark"] .two{background:#233e39;opacity:.45}html[data-theme="dark"] .sidebar{background:#201d2cc2;border-color:#ffffff0c}html[data-theme="dark"] .brandmark{background:#c8b7f2;color:#252130}html[data-theme="dark"] .nav button{color:#a49db5}html[data-theme="dark"] .nav button.active{background:#3b3157;color:#d6c7ff}html[data-theme="dark"] .groupbtn.active{background:#ffffff09}html[data-theme="dark"] .groupdot{background:#3c314f}html[data-theme="dark"] .card{border-color:#ffffff0d}html[data-theme="dark"] .stat.purple{background:linear-gradient(120deg,#3c2d53bd,#252231c2)}html[data-theme="dark"] .stat.mint{background:linear-gradient(120deg,#243f36bd,#242831c2)}html[data-theme="dark"] .stat.peach{background:linear-gradient(120deg,#45332cbd,#2b252fc2)}html[data-theme="dark"] .stat .statlabel,html[data-theme="dark"] .stat .small{color:#b1a8c2}html[data-theme="dark"] input,html[data-theme="dark"] textarea,html[data-theme="dark"] select{background:#ffffff08;border-color:#ffffff1c;color:var(--ink)}html[data-theme="dark"] select option{background:#292431;color:var(--ink)}html[data-theme="dark"] .icon,html[data-theme="dark"] .secondary,html[data-theme="dark"] .attendance-guide,html[data-theme="dark"] .install{background:#ffffff08;border-color:#ffffff16}html[data-theme="dark"] .primary{background:#9378df;color:#fff}html[data-theme="dark"] .textbtn{color:#bba5f3}html[data-theme="dark"] .badge,html[data-theme="dark"] .rsvp,html[data-theme="dark"] .react,html[data-theme="dark"] .badgebutton{background:#3a304d;color:#c4b3e6}html[data-theme="dark"] .badge.green{background:#254436;color:#a0d1b4}html[data-theme="dark"] .badge.red{background:#4b2b36;color:#e3a4b6}html[data-theme="dark"] .avatar{box-shadow:0 0 0 2px #ffffff0a;filter:brightness(.85)}html[data-theme="dark"] .expenseicon{background:#393044}html[data-theme="dark"] .search input{background:#ffffff07}html[data-theme="dark"] .clowncard{background:linear-gradient(135deg,#352944cb,#3b2e2bca)}html[data-theme="dark"] .clowncard p{color:#b6a7bd}html[data-theme="dark"] .tabs{background:#ffffff07}html[data-theme="dark"] .tabs button.active{background:#544166;color:#eee2ff}html[data-theme="dark"] .bar{background:#ffffff0c}html[data-theme="dark"] .positive{color:#94c6ab}html[data-theme="dark"] .negative,html[data-theme="dark"] .danger{color:#df9aae}html[data-theme="dark"] .notice{background:#3b2e4b;color:#c4b4d3}html[data-theme="dark"] dialog{background:#24212ef5;border-color:#ffffff19}html[data-theme="dark"] dialog::backdrop{background:#08060d99}html[data-theme="dark"] .checks label{background:#3b314d}html[data-theme="dark"] .react.on{background:#655080;color:#fff}html[data-theme="dark"] .attendance-option{background:#ffffff04;border-color:#ffffff18}html[data-theme="dark"] .attendance-option.selected.yes{background:#2b4a3b;border-color:#5a9272;color:#b2e4c4}html[data-theme="dark"] .attendance-option.selected.no{background:#512d3d;border-color:#9b5c72;color:#f0b8ce}html[data-theme="dark"] .attendance-option.selected.late{background:#4b3d28;border-color:#947b4e;color:#e7cb94}html[data-theme="dark"] .footer,html[data-theme="dark"] .footerhint{color:#8d829e}html[data-theme="dark"] #toast{background:#ded3f1;color:#292032}html[data-theme="dark"] .subtle,html[data-theme="dark"] .crumb,html[data-theme="dark"] .status,html[data-theme="dark"] .eyebrow{color:#9f94ad}@media(max-width:700px){.attendance-shortcut{flex-wrap:wrap;gap:10px}.attendance-shortcut>span{width:100%}.attendance-guide{display:block}.attendance-guide .secondary{margin-top:14px}.attendance-option{padding:10px 5px}.tools{gap:6px}.tools .icon{width:34px;height:34px}.tools .status{font-size:9px}.mobilegroups{max-width:145px}html[data-theme="dark"] .sidebar{background:#262130eb;border-color:#ffffff1a}}
 
 .adminlinks{display:flex;flex-direction:column;gap:13px;margin-top:23px}.settingsblock #pushreport{line-height:1.8;overflow-wrap:anywhere}
+
+/* ---- Mobile refinements: the app is used mostly from phones ---- */
+:root{--sheet:#f6f4fb}html[data-theme="dark"]{--sheet:#24212e}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,a,select,label,input,textarea{touch-action:manipulation}
+@keyframes cc-sheet{from{transform:translateY(48px);opacity:.3}to{transform:none;opacity:1}}
+@media(max-width:700px){
+ body{overscroll-behavior-y:none}
+ .main{padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(112px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+ /* Under 16px iOS zooms the whole page when a field gets focus */
+ input,select,textarea{font-size:16px}
+ .checks label{font-size:14px;padding:11px 14px;min-height:44px}
+ .checks input,.checkline input[type=checkbox]{width:20px;height:20px;flex-shrink:0}
+ .textbtn{min-height:44px;display:inline-flex;align-items:center;font-size:13px}
+ .secondary{min-height:44px}
+ .primary{min-height:46px}
+ .topbar{gap:8px;margin-bottom:22px}
+ .tools{gap:6px;flex-shrink:0}
+ .tools .icon{width:40px;height:40px}
+ .tools .status{font-size:0;gap:0}
+ .mobilegroups{flex:1;min-width:0;max-width:none}
+ .mobilegroups select{min-height:44px;font-size:15px;font-weight:600;text-overflow:ellipsis}
+ .nav button{font-size:10px}
+ .heading{gap:12px}
+ .heading h1{font-size:27px;letter-spacing:-1.2px}
+ #toast{bottom:calc(98px + env(safe-area-inset-bottom));left:16px;right:16px;max-width:none;text-align:center;transform:translateY(16px)}
+ #toast.visible{transform:none}
+ /* Dialogs become bottom sheets with a fixed header and a reachable save button */
+ dialog{position:fixed;inset:auto 0 0 0;margin:0;width:100%;max-width:100%;max-height:calc(100dvh - 18px - env(safe-area-inset-top));border-radius:26px 26px 0 0;border-bottom:0;padding:0 18px;overscroll-behavior:contain;animation:cc-sheet .26s cubic-bezier(.2,.8,.2,1)}
+ dialog>:last-child{margin-bottom:calc(20px + env(safe-area-inset-bottom))}
+ .modalhead{position:sticky;top:0;z-index:3;margin:0 -18px 4px;padding:10px 18px 8px;background:var(--sheet)}
+ .modalhead:before{content:'';position:absolute;top:7px;left:50%;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:#8c86a033}
+ .modalhead h2{padding-top:12px}
+ .modalhead button{width:44px;height:44px;margin:6px -10px 0 0;font-size:26px}
+ dialog form>.formactions{position:sticky;bottom:0;z-index:3;margin:18px -18px 0;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:var(--sheet);border-top:1px solid var(--line)}
+ dialog form>.formactions .primary{margin-top:0;width:100%}
+}
+@media(max-width:700px) and (prefers-reduced-motion:reduce){dialog{animation:none}}
