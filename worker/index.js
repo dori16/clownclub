@@ -79,4 +79,4 @@ export default {async fetch(request,env,ctx){try{const u=new URL(request.url),pa
   }
   if(path==='/api/push/unsubscribe'&&request.method==='POST'){const d=await body(request),key=await digest(d.endpoint||''),existing=JSON.parse(await storeFor(env).hget('cc:push',key)||'null');if(existing?.user_id===id)await storeFor(env).hdel('cc:push',key);return json({ok:true});}
   return json({error:'Operazione non disponibile'},404);
-}catch(err){return json({error:'Operazione non riuscita. Riprova.'},500);}}};
+}catch(err){const message=String(err?.message||'');console.error('[clown-club]',message);return json({error:/^Redis/.test(message)?message:'Operazione non riuscita. Riprova.'},500);}}};
