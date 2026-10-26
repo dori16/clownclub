@@ -4,7 +4,7 @@ Una PWA per spese di gruppo, saldi, appello e sfottò. I dati sono cifrati prima
 
 ## Primo accesso
 
-Usa la password iniziale fornita con la consegna, quindi cambiala in Impostazioni. Condividi la nuova password solo con gli amici del circo. “Ricordami” conserva sul dispositivo la chiave per aprire l’archivio. L’accesso resta attivo senza scadenza applicativa; cancellazione dati del browser, disinstallazione o uscita possono richiedere un nuovo accesso. Nessuna app web può garantire che il sistema conservi i dati per sempre.
+Entra con la password del circo che ti ha dato Doriano: la stessa password apre il sito e l’archivio cifrato. Al primo accesso l’app carica il circo dal foglio Google, se è collegato. Se Doriano cambia la password in Impostazioni deve aggiornare anche CLUB_PASSWORD su Vercel. “Ricordami” conserva sul dispositivo la chiave per aprire l’archivio. L’accesso resta attivo senza scadenza applicativa; cancellazione dati del browser, disinstallazione o uscita possono richiedere un nuovo accesso. Nessuna app web può garantire che il sistema conservi i dati per sempre.
 
 ## Notifiche del circo
 

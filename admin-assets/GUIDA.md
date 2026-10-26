@@ -4,7 +4,7 @@ Una PWA per spese di gruppo, saldi, appello e sfottò. I dati sono cifrati prima
 
 ## Primo accesso
 
-Usa la password iniziale fornita con la consegna, quindi cambiala in Impostazioni. Condividi la nuova password solo con gli amici del circo. “Ricordami” conserva sul dispositivo la chiave per aprire l’archivio. L’accesso resta attivo senza scadenza applicativa; cancellazione dati del browser, disinstallazione o uscita possono richiedere un nuovo accesso. Nessuna app web può garantire che il sistema conservi i dati per sempre.
+Entra con la password del circo che ti ha dato Doriano: la stessa password apre il sito e l’archivio cifrato. Al primo accesso l’app carica il circo dal foglio Google, se è collegato. Se Doriano cambia la password in Impostazioni deve aggiornare anche CLUB_PASSWORD su Vercel. “Ricordami” conserva sul dispositivo la chiave per aprire l’archivio. L’accesso resta attivo senza scadenza applicativa; cancellazione dati del browser, disinstallazione o uscita possono richiedere un nuovo accesso. Nessuna app web può garantire che il sistema conservi i dati per sempre.
 
 ## Google Sheets
 
@@ -12,8 +12,8 @@ Usa la password iniziale fornita con la consegna, quindi cambiala in Impostazion
 2. Incolla il file `Google-Sheets.gs` scaricabile dall’app. Sostituisci il token nella funzione `setup` con almeno 24 caratteri casuali. Il token deve essere diverso dalla password del circo.
 3. Esegui `setup` e autorizza lo script sul tuo account. Il foglio ospiterà una scheda `ClownVault`.
 4. In Apps Script scegli Distribuisci → Nuova distribuzione → Web app. Esegui come te e consenti accesso a Chiunque. Il servizio rifiuta richieste senza il token corretto; il contenuto del foglio resta cifrato. Non pubblicare o condividere il foglio come documento pubblico.
-5. Copia l’URL che finisce con `/exec` e inseriscilo con il token in Impostazioni dell’app. Premi Collega. La prima copia inizializza il foglio; se contiene già dati viene proposta la versione remota.
-6. Sugli altri dispositivi apri la stessa app, inserisci URL e token e carica il circo dal foglio usando la stessa password. Per condividere l’app con amici, il suo hosting deve consentire loro l’accesso: la prima pubblicazione Sites è privata per il proprietario.
+5. Copia l’URL che finisce con `/exec` e inseriscilo con il token in Impostazioni → Area Doriano. Premi Salva e collega. La prima copia inizializza il foglio; se contiene già dati viene proposta la versione remota.
+6. Gli amici non devono inserire URL o token: basta che aprano l’app ed entrino con la password del circo. In alternativa al pannello puoi impostare URL e token come variabili SHEETS_URL e SHEETS_TOKEN su Vercel.
 7. Le modifiche vengono salvate prima sul dispositivo e poi sincronizzate quando il foglio è collegato. All’apertura della PWA premi Sincronizza per ricevere le modifiche degli amici; le scritture confrontano sempre la revisione condivisa. Se due dispositivi hanno modifiche diverse, l’app ferma il caricamento e propone backup locale e caricamento remoto. Non unisce automaticamente modifiche concorrenti. Prima di cambiare dispositivo sincronizza; evita modifiche simultanee finché non hai ricaricato.
 
 Il foglio ospita un archivio cifrato diviso in blocchi, non una tabella di spese leggibili. È una scelta per proteggere dati e password. Non modificare manualmente i blocchi. Un account Google Workspace può vietare web app aperte a Chiunque: in quel caso questa integrazione richiede un account/policy che lo consenta. Il collegamento reale non è testabile prima della distribuzione del tuo script.
@@ -47,9 +47,9 @@ Le classifiche e i messaggi sono scherzi tra amici. Reazioni una per profilo e c
 
 ## Area Doriano e notifiche
 
-Apri Impostazioni con il profilo Doriano sul tuo account ChatGPT autorizzato, poi Sblocca area Doriano. Inserisci la password amministratore che hai scelto. La sessione amministratore dura fino a 24 ore o al blocco esplicito. Le verifiche sono sul server: cambiare soltanto nome profilo non concede accesso. Script, guida di configurazione e token del foglio sono protetti e non memorizzati dal service worker.
+Apri Impostazioni con il profilo Doriano, poi Sblocca area Doriano. Inserisci la password amministratore (ADMIN_PASSWORD su Vercel). La sessione amministratore dura fino a 24 ore o al blocco esplicito. Le verifiche sono sul server: senza la password amministratore il profilo Doriano non concede accesso. Script, guida di configurazione e token del foglio sono protetti e non memorizzati dal service worker.
 
-In questa area puoi configurare Google Sheets per tutti. Il token del foglio rimane sul server; gli amici non devono inserirlo. I dati di spesa restano sul dispositivo e nel foglio cifrato. Un database tecnico del sito conserva solamente impostazioni amministrative, sessioni e iscrizioni push. Per usare la sincronizzazione e le notifiche, gli amici devono avere accesso al sito tramite le sue autorizzazioni: questa pubblicazione mantiene l’accesso privato esistente.
+In questa area puoi configurare Google Sheets per tutti. Il token del foglio rimane sul server; gli amici non devono inserirlo. I dati di spesa restano sul dispositivo e nel foglio cifrato. Redis (Upstash) conserva solamente la configurazione del foglio, i limiti ai tentativi di accesso e le iscrizioni push. Per sincronizzazione e notifiche gli amici devono essere entrati con la password del circo.
 
 Gli amici attivano le notifiche su ogni dispositivo. Il pannello mostra i dispositivi iscritti. Scrivi titolo e messaggio, premi Invia a tutti e conferma l’anteprima. Il risultato indica quanti servizi push hanno accettato il messaggio, non garantisce che sia già stato letto o consegnato. Le iscrizioni scadute vengono rimosse. Nessuna notifica viene inviata automaticamente alla pubblicazione dell’app.
 

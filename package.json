@@ -8,9 +8,10 @@
     "build": "bash scripts/build.sh",
     "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
     "vapid:generate": "node scripts/generate-vapid.mjs",
-    "vault:init": "node --env-file-if-exists=.env scripts/init-vault.mjs"
+    "vault:init": "node --env-file-if-exists=.env scripts/init-vault.mjs",
+    "secret:generate": "node -e \"console.log('SESSION_SECRET='+require('crypto').randomBytes(32).toString('base64url'))\""
   },
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   }
 }

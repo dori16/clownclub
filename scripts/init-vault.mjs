@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';import {b64,derive,seal} from '../public/vault.js';
-const password=process.env.INITIAL_VAULT_PASSWORD||'';
-if(password.length<12||password.startsWith('replace-'))throw Error('Set INITIAL_VAULT_PASSWORD in .env to a unique password of at least 12 characters.');
+const password=process.env.INITIAL_VAULT_PASSWORD||process.env.CLUB_PASSWORD||'';
+if(password.length<12||password.startsWith('replace-'))throw Error('Set CLUB_PASSWORD in .env to a unique password of at least 12 characters.');
 const target='public/seed.clown';
 try{await fs.access(target);throw Error('public/seed.clown already exists. Back it up and remove it explicitly before initializing a different archive.');}catch(err){if(err.code!=='ENOENT')throw err;}
 const salt=b64(crypto.getRandomValues(new Uint8Array(16))),key=await derive(password,salt);

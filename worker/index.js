@@ -1,60 +1,82 @@
-import {url64,from64,allowedPushEndpoint,sendPush} from './push.js';
+import {url64,from64,allowedPushEndpoint,sendPush} from './push.js';import {storeFor} from './store.js';
 const textEncoder=new TextEncoder();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});
 async function digest(value){return url64(await crypto.subtle.digest('SHA-256',textEncoder.encode(value)));}
-const cookie=request=>(request.headers.get('Cookie')||'').match(/(?:^|;\s*)cc-admin=([^;]+)/)?.[1];
-function visitor(request){return request.headers.get('oai-authenticated-user-id');}
-async function config(env,key){return (await env.DB.prepare('SELECT value FROM cc_config WHERE key = ?').bind(key).first())?.value||null;}
-async function putConfig(env,key,value){return env.DB.prepare('INSERT INTO cc_config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key,value).run();}
-async function owner(request,env){const id=visitor(request);if(!id||(request.headers.get('oai-authenticated-user-email')||'').toLowerCase()!==env.ADMIN_EMAIL?.toLowerCase())return false;const bound=await config(env,'owner_id');return !bound||bound===id;}
-async function admin(request,env){if(!await owner(request,env))return false;const c=cookie(request);if(!c)return false;return !!await env.DB.prepare('SELECT hash FROM cc_sessions WHERE hash=? AND user_id=? AND expires>?').bind(await digest(c),visitor(request),Date.now()).first();}
+const readCookie=(request,name)=>(request.headers.get('Cookie')||'').match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`))?.[1];
+const CLUB_DAYS=365,ADMIN_HOURS=24;
+
+// Sessions are signed cookies: "<kind>.<visitor>.<issued>.<expires>.<signature>". Nothing is stored server side.
+async function secret(env){return env.SESSION_SECRET||await digest('clown-club:'+(env.CLUB_PASSWORD||'')+':'+(env.ADMIN_PASSWORD||''));}
+async function sign(env,payload){const key=await crypto.subtle.importKey('raw',textEncoder.encode(await secret(env)),{name:'HMAC',hash:'SHA-256'},false,['sign']);return url64(await crypto.subtle.sign('HMAC',key,textEncoder.encode(payload)));}
+async function issue(env,kind,visitor,lifetime){const now=Date.now(),payload=`${kind}.${visitor}.${now}.${now+lifetime}`;return payload+'.'+await sign(env,payload);}
+async function verify(env,token,kind){if(!token)return null;const parts=token.split('.');if(parts.length!==5||parts[0]!==kind)return null;const [,visitor,issued,expires,signature]=parts;if(Number(expires)<Date.now())return null;if(await digest(signature)!==await digest(await sign(env,parts.slice(0,4).join('.'))))return null;return {visitor,issued:Number(issued)};}
+const cookieHeader=(name,value,path,maxAge,secure)=>`${name}=${value}; Path=${path}; HttpOnly;${secure?' Secure;':''} SameSite=Strict; Max-Age=${maxAge}`;
+const isSecure=u=>u.protocol==='https:';
+
+async function visitor(request,env){return (await verify(env,readCookie(request,'cc-club'),'c'))?.visitor||null;}
+async function admin(request,env,id){const session=await verify(env,readCookie(request,'cc-admin'),'a');if(!session||session.visitor!==id)return false;const loggedOut=Number(await storeFor(env).get('cc:admin-logout:'+id)||0);return session.issued>loggedOut;}
 async function body(request){const raw=await request.text();if(raw.length>6000000)throw Error('Richiesta troppo grande');return JSON.parse(raw||'{}');}
-async function rate(env,key,max=10,window=600000){const bucket=Math.floor(Date.now()/window),result=await env.DB.prepare('INSERT INTO cc_limits(key,bucket,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN bucket=excluded.bucket THEN count+1 ELSE 1 END,bucket=excluded.bucket RETURNING count').bind(key,bucket).first();return result.count<=max;}
+async function rate(env,key,max=10,windowMs=600000){const bucket=Math.floor(Date.now()/windowMs);return await storeFor(env).incr(`cc:rate:${key}:${bucket}`,Math.ceil(windowMs/1000))<=max;}
+const clientIp=request=>request.headers.get('x-real-ip')||(request.headers.get('x-forwarded-for')||'').split(',')[0].trim()||'local';
+const samePassword=async(given,expected)=>!!expected&&await digest(String(given??''))===await digest(expected);
 function safeSheetUrl(s){return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(s);}
+async function sheets(env){if(env.SHEETS_URL&&env.SHEETS_TOKEN)return {url:env.SHEETS_URL,token:env.SHEETS_TOKEN,fromEnv:true};return JSON.parse(await storeFor(env).get('cc:sheets')||'null');}
+async function pushRows(env){return Object.entries(await storeFor(env).hgetall('cc:push')).map(([id,raw])=>({id,...JSON.parse(raw)}));}
+
 export default {async fetch(request,env,ctx){try{const u=new URL(request.url),path=u.pathname;
   if(!path.startsWith('/api/')){const a=typeof ASSETS!=='undefined'?ASSETS:{};const asset=a[path==='/'?'/index.html':path];if(!asset)return new Response('Not found',{status:404});return new Response(from64(asset.data),{headers:{'Content-Type':asset.type,'Cache-Control':path==='/sw.js'?'no-cache':'public,max-age=0,must-revalidate','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin',...(path==='/sw.js'?{'Service-Worker-Allowed':'/'}:{})}});}
   if(request.method!=='GET'&&request.headers.get('Origin')&&request.headers.get('Origin')!==u.origin)return json({error:'Origine non autorizzata'},403);
-  if(!visitor(request))return json({error:'Accedi al sito con ChatGPT'},401);
-  if(path==='/api/whoami')return json({isDoriano:await owner(request,env)});
-  if(path==='/api/club/status')return json({connected:!!await config(env,'sheets'),pushReady:!!env.VAPID_PUBLIC_KEY});
+  if(!env.CLUB_PASSWORD)return json({error:'CLUB_PASSWORD non configurata sul server'},500);
+  if(path==='/api/login'&&request.method==='POST'){
+    if(!await rate(env,'login:'+clientIp(request),10))return json({error:'Troppi tentativi. Riprova tra qualche minuto.'},429);
+    const d=await body(request);if(!await samePassword(d.password,env.CLUB_PASSWORD))return json({error:'Password errata'},401);
+    const id=await visitor(request,env)||url64(crypto.getRandomValues(new Uint8Array(12)));
+    return json({ok:true},200,{'Set-Cookie':cookieHeader('cc-club',await issue(env,'c',id,CLUB_DAYS*86400000),'/',CLUB_DAYS*86400,isSecure(u))});
+  }
+  const id=await visitor(request,env);
+  if(!id)return json({error:'Entra con la password del circo'},401);
+  if(path==='/api/whoami')return json({isDoriano:true});
+  if(path==='/api/club/status')return json({connected:!!await sheets(env),pushReady:!!env.VAPID_PUBLIC_KEY});
   if(path==='/api/admin/login'&&request.method==='POST'){
-    if(!await owner(request,env))return json({error:'Area riservata a Doriano'},403);
-    if(!await rate(env,'login:'+visitor(request)+':'+(request.headers.get('CF-Connecting-IP')||''),5))return json({error:'Troppi tentativi. Riprova tra qualche minuto.'},429);
-    const d=await body(request);if(!env.ADMIN_PASSWORD||await digest(String(d.password))!==await digest(env.ADMIN_PASSWORD))return json({error:'Password errata'},401);
-    await putConfig(env,'owner_id',visitor(request));const token=url64(crypto.getRandomValues(new Uint8Array(32)));await env.DB.prepare('DELETE FROM cc_sessions WHERE expires < ?').bind(Date.now()).run();await env.DB.prepare('INSERT INTO cc_sessions(hash,user_id,expires) VALUES(?,?,?)').bind(await digest(token),visitor(request),Date.now()+86400000).run();return json({ok:true},200,{'Set-Cookie':`cc-admin=${token}; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`});
+    if(!await rate(env,'admin:'+clientIp(request),5))return json({error:'Troppi tentativi. Riprova tra qualche minuto.'},429);
+    const d=await body(request);if(!await samePassword(d.password,env.ADMIN_PASSWORD))return json({error:'Password errata'},401);
+    return json({ok:true},200,{'Set-Cookie':cookieHeader('cc-admin',await issue(env,'a',id,ADMIN_HOURS*3600000),'/api/admin',ADMIN_HOURS*3600,isSecure(u))});
   }
   if(path.startsWith('/api/admin/')){
-    if(!await admin(request,env))return json({error:'Sblocca l’area Doriano con la password'},403);
+    if(!await admin(request,env,id))return json({error:'Sblocca l’area Doriano con la password'},403);
     if(path==='/api/admin/session')return json({ok:true});
-    if(path==='/api/admin/logout'&&request.method==='POST'){const c=cookie(request);if(c)await env.DB.prepare('DELETE FROM cc_sessions WHERE hash=?').bind(await digest(c)).run();return json({ok:true},200,{'Set-Cookie':'cc-admin=; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=0'});}
+    if(path==='/api/admin/logout'&&request.method==='POST'){await storeFor(env).set('cc:admin-logout:'+id,String(Date.now()));return json({ok:true},200,{'Set-Cookie':cookieHeader('cc-admin','','/api/admin',0,isSecure(u))});}
     if(path==='/api/admin/script'||path==='/api/admin/guide'){const filename=path.endsWith('script')?'Google-Sheets.gs':'GUIDA.md',entry=typeof ADMIN_ASSETS!=='undefined'?ADMIN_ASSETS[filename]:null;if(!entry)return json({error:'File non disponibile'},404);return new Response(from64(entry.data),{headers:{'Content-Type':'text/plain;charset=utf-8','Cache-Control':'no-store','Content-Disposition':`attachment; filename="${filename}"`}});}
     if(path==='/api/admin/sheets'){
-      const saved=JSON.parse(await config(env,'sheets')||'null');
-      if(request.method==='GET')return json({url:saved?.url||'',hasToken:!!saved?.token});
-      const d=await body(request);if(request.method==='DELETE'){await env.DB.prepare('DELETE FROM cc_config WHERE key=?').bind('sheets').run();return json({ok:true});}
-      if(!safeSheetUrl(d.url)||!(d.token||saved?.token)||String(d.token||saved?.token).length<24)return json({error:'URL o token non valido'},400);await putConfig(env,'sheets',JSON.stringify({url:d.url,token:d.token||saved.token}));return json({ok:true});
+      const saved=await sheets(env);
+      if(request.method==='GET')return json({url:saved?.url||'',hasToken:!!saved?.token,fromEnv:!!saved?.fromEnv});
+      if(saved?.fromEnv)return json({error:'Il foglio è configurato nelle variabili di Vercel (SHEETS_URL e SHEETS_TOKEN): modificalo lì'},409);
+      if(request.method==='DELETE'){await storeFor(env).del('cc:sheets');return json({ok:true});}
+      const d=await body(request);
+      if(!safeSheetUrl(d.url)||!(d.token||saved?.token)||String(d.token||saved?.token).length<24)return json({error:'URL o token non valido'},400);await storeFor(env).set('cc:sheets',JSON.stringify({url:d.url,token:d.token||saved.token}));return json({ok:true});
     }
-    if(path==='/api/admin/subscribers'){const {results}=await env.DB.prepare('SELECT member_name,created,updated FROM cc_push ORDER BY updated DESC').all();return json({devices:results});}
+    if(path==='/api/admin/subscribers'){const devices=(await pushRows(env)).sort((a,b)=>b.updated-a.updated).map(({member_name,created,updated})=>({member_name,created,updated}));return json({devices});}
     if(path==='/api/admin/push'&&request.method==='POST'){
       const d=await body(request),title=String(d.title||'').trim(),message=String(d.body||'').trim();if(!title||!message||title.length>80||message.length>500)return json({error:'Inserisci titolo (max 80) e messaggio (max 500)'},400);
       if(!await rate(env,'broadcast',30,3600000))return json({error:'Troppi invii ravvicinati'},429);
-      const {results}=await env.DB.prepare('SELECT id,subscription FROM cc_push').all();if(!results.length)return json({error:'Nessun dispositivo ha attivato le notifiche'},400);
+      const results=await pushRows(env);if(!results.length)return json({error:'Nessun dispositivo ha attivato le notifiche'},400);
       const report={total:results.length,accepted:0,expired:0,failed:0};const payload={title,body:message,url:'/',tag:'clown-'+crypto.randomUUID()};
-      for(let i=0;i<results.length;i+=8){await Promise.all(results.slice(i,i+8).map(async row=>{try{const r=await sendPush(JSON.parse(row.subscription),payload,env);if(r.ok)report.accepted++;else if(r.status===404||r.status===410){report.expired++;await env.DB.prepare('DELETE FROM cc_push WHERE id=?').bind(row.id).run();}else report.failed++;}catch{report.failed++;}}));}return json(report);
+      for(let i=0;i<results.length;i+=8){await Promise.all(results.slice(i,i+8).map(async row=>{try{const r=await sendPush(JSON.parse(row.subscription),payload,env);if(r.ok)report.accepted++;else if(r.status===404||r.status===410){report.expired++;await storeFor(env).hdel('cc:push',row.id);}else report.failed++;}catch{report.failed++;}}));}return json(report);
     }
     return json({error:'Operazione non disponibile'},404);
   }
   if(path==='/api/sync'){
-    const settings=JSON.parse(await config(env,'sheets')||'null');if(!settings)return json({ok:false,error:'Il foglio non è ancora collegato da Doriano'},409);const target=new URL(settings.url);let opts={redirect:'follow',signal:AbortSignal.timeout(25000)};
+    const settings=await sheets(env);if(!settings)return json({ok:false,error:'Il foglio non è ancora collegato da Doriano'},409);const target=new URL(settings.url);let opts={redirect:'follow',signal:AbortSignal.timeout(25000)};
     if(request.method==='GET'){target.searchParams.set('token',settings.token);target.searchParams.set('t',Date.now());}else if(request.method==='POST'){const d=await body(request);opts={...opts,method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:settings.token,expectedRevision:d.expectedRevision,envelope:d.envelope})};}else return json({error:'Metodo non supportato'},405);
     const r=await fetch(target,opts);if(!r.ok)return json({ok:false,error:'Google Sheets non risponde'},502);return json(await r.json());
   }
   if(path==='/api/push/key')return json({publicKey:env.VAPID_PUBLIC_KEY});
   if(path==='/api/push/subscribe'&&request.method==='POST'){
-    if(!await rate(env,'subscribe:'+visitor(request),50,3600000))return json({error:'Troppi dispositivi registrati in poco tempo'},429);
-    const d=await body(request),sub=d.subscription;if(!sub||!allowedPushEndpoint(sub.endpoint)||!sub.keys?.p256dh||!sub.keys?.auth)return json({error:'Sottoscrizione non valida'},400);try{if(from64(sub.keys.p256dh).length!==65||from64(sub.keys.auth).length!==16)throw Error();}catch{return json({error:'Chiavi push non valide'},400);}const id=await digest(sub.endpoint),existing=await env.DB.prepare('SELECT user_id FROM cc_push WHERE id=?').bind(id).first();if(existing&&existing.user_id!==visitor(request))return json({error:'Dispositivo associato a un altro utente'},403);
-    const now=Date.now();await env.DB.prepare('INSERT INTO cc_push(id,user_id,member_name,subscription,created,updated) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET member_name=excluded.member_name,subscription=excluded.subscription,updated=excluded.updated').bind(id,visitor(request),String(d.name||'Amico').slice(0,100),JSON.stringify(sub),now,now).run();return json({ok:true});
+    if(!await rate(env,'subscribe:'+id,50,3600000))return json({error:'Troppi dispositivi registrati in poco tempo'},429);
+    const d=await body(request),sub=d.subscription;if(!sub||!allowedPushEndpoint(sub.endpoint)||!sub.keys?.p256dh||!sub.keys?.auth)return json({error:'Sottoscrizione non valida'},400);try{if(from64(sub.keys.p256dh).length!==65||from64(sub.keys.auth).length!==16)throw Error();}catch{return json({error:'Chiavi push non valide'},400);}
+    const key=await digest(sub.endpoint),existing=JSON.parse(await storeFor(env).hget('cc:push',key)||'null');if(existing&&existing.user_id!==id)return json({error:'Dispositivo associato a un altro utente'},403);
+    const now=Date.now();await storeFor(env).hset('cc:push',key,JSON.stringify({user_id:id,member_name:String(d.name||'Amico').slice(0,100),subscription:JSON.stringify(sub),created:existing?.created||now,updated:now}));return json({ok:true});
   }
-  if(path==='/api/push/unsubscribe'&&request.method==='POST'){const d=await body(request);await env.DB.prepare('DELETE FROM cc_push WHERE id=? AND user_id=?').bind(await digest(d.endpoint||''),visitor(request)).run();return json({ok:true});}
+  if(path==='/api/push/unsubscribe'&&request.method==='POST'){const d=await body(request),key=await digest(d.endpoint||''),existing=JSON.parse(await storeFor(env).hget('cc:push',key)||'null');if(existing?.user_id===id)await storeFor(env).hdel('cc:push',key);return json({ok:true});}
   return json({error:'Operazione non disponibile'},404);
 }catch(err){return json({error:'Operazione non riuscita. Riprova.'},500);}}};
