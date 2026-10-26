@@ -20,7 +20,9 @@ async function rate(env,key,max=10,windowMs=600000){const bucket=Math.floor(Date
 const clientIp=request=>request.headers.get('x-real-ip')||(request.headers.get('x-forwarded-for')||'').split(',')[0].trim()||'local';
 const samePassword=async(given,expected)=>!!expected&&await digest(String(given??''))===await digest(expected);
 function safeSheetUrl(s){return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(s);}
-async function sheets(env){if(env.SHEETS_URL&&env.SHEETS_TOKEN)return {url:env.SHEETS_URL,token:env.SHEETS_TOKEN,fromEnv:true};return JSON.parse(await storeFor(env).get('cc:sheets')||'null');}
+// Pasted values often carry spaces, newlines or quotes: strip them so the token matches the Apps Script one.
+const clean=v=>String(v??'').trim().replace(/^(['"])(.*)\1$/,'$2').trim();
+async function sheets(env){if(clean(env.SHEETS_URL)&&clean(env.SHEETS_TOKEN))return {url:clean(env.SHEETS_URL),token:clean(env.SHEETS_TOKEN),fromEnv:true};const saved=JSON.parse(await storeFor(env).get('cc:sheets')||'null');return saved&&{url:clean(saved.url),token:clean(saved.token)};}
 async function pushRows(env){return Object.entries(await storeFor(env).hgetall('cc:push')).map(([id,raw])=>({id,...JSON.parse(raw)}));}
 
 export default {async fetch(request,env,ctx){try{const u=new URL(request.url),path=u.pathname;
@@ -52,7 +54,7 @@ export default {async fetch(request,env,ctx){try{const u=new URL(request.url),pa
       if(request.method==='GET')return json({url:saved?.url||'',hasToken:!!saved?.token,fromEnv:!!saved?.fromEnv});
       if(saved?.fromEnv)return json({error:'Il foglio è configurato nelle variabili di Vercel (SHEETS_URL e SHEETS_TOKEN): modificalo lì'},409);
       if(request.method==='DELETE'){await storeFor(env).del('cc:sheets');return json({ok:true});}
-      const d=await body(request);
+      const d=await body(request);d.url=clean(d.url);d.token=clean(d.token);
       if(!safeSheetUrl(d.url)||!(d.token||saved?.token)||String(d.token||saved?.token).length<24)return json({error:'URL o token non valido'},400);await storeFor(env).set('cc:sheets',JSON.stringify({url:d.url,token:d.token||saved.token}));return json({ok:true});
     }
     if(path==='/api/admin/subscribers'){const devices=(await pushRows(env)).sort((a,b)=>b.updated-a.updated).map(({member_name,created,updated})=>({member_name,created,updated}));return json({devices});}
